@@ -2,8 +2,8 @@ name: Run Quotex Signal Bot Every 5 Minutes
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
-  workflow_dispatch:
+    - cron: "*/5 * * * *"  # Every 5 minutes
+  workflow_dispatch:        # Manual trigger
 
 jobs:
   run-bot:
@@ -25,6 +25,6 @@ jobs:
     - name: Run the signal bot
       run: python quotex_signal_bot.py
       env:
-        TELEGRAM_BOT_TOKEN: ${{ secrets.2bbdaeca1e7e4010a0833015a50350e8 }}
-        TELEGRAM_USER_ID: ${{ secrets.7989610604 }}
-        TWELVE_DATA_API_KEY: ${{ secrets.2bbdaeca1e7e4010a0833015a50350e8 }}
+        BOT_API_TOKEN: ${{ secrets.BOT_API_TOKEN }}
+        USER_ID: ${{ secrets.USER_ID }}
+        API_KEY: ${{ secrets.API_KEY }}
