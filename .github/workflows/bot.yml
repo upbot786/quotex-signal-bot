@@ -24,3 +24,7 @@ jobs:
 
     - name: Run the signal bot
       run: python quotex_signal_bot.py
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.2bbdaeca1e7e4010a0833015a50350e8 }}
+        TELEGRAM_USER_ID: ${{ secrets.7989610604 }}
+        TWELVE_DATA_API_KEY: ${{ secrets.2bbdaeca1e7e4010a0833015a50350e8 }}
