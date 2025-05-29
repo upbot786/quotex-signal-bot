@@ -1,117 +1,68 @@
 import requests
-import datetime
 import pytz
 import os
-from statistics import mean
+from datetime import datetime
 
-# === LOAD SECRETS FROM ENVIRONMENT ===
+# ✅ Load secrets from GitHub Actions environment variables
 BOT_API_TOKEN = os.getenv("7636996493:AAEa9ddt4okvNj2RyeWGPemvN3NDsQ_wXCc")
 USER_ID = os.getenv("7989610604")
 API_KEY = os.getenv("2bbdaeca1e7e4010a0833015a50350e8")
 
-symbols = ["EUR/USD", "USD/JPY", "GBP/USD", "BTC/USD", "ETH/USD"]
+# ✅ Symbol and interval
+symbol = "BTC/USD"
+interval = "1min"
 
-def calculate_ema(prices, period):
-    k = 2 / (period + 1)
-    ema = prices[0]
-    for price in prices[1:]:
-        ema = price * k + ema * (1 - k)
-    return ema
+# ✅ Set timezone
+timezone = pytz.timezone("UTC")
+now = datetime.now(timezone)
+timestamp = now.strftime("%H:%M:%S")
 
-def calculate_rsi(prices, period=14):
-    gains, losses = [], []
-    for i in range(1, len(prices)):
-        diff = prices[i] - prices[i - 1]
-        gains.append(max(0, diff))
-        losses.append(max(0, -diff))
-    if len(gains) < period:
-        return 50
-    avg_gain = mean(gains[-period:])
-    avg_loss = mean(losses[-period:])
-    if avg_loss == 0:
-        return 100
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+# ✅ Fetch market data from Twelve Data API
+url = f"https://api.twelvedata.com/time_series?symbol={symbol.replace('/', '')}&interval={interval}&apikey={API_KEY}&outputsize=2"
+response = requests.get(url)
+data = response.json()
 
-def calculate_macd(prices, fast=12, slow=26, signal_period=9):
-    if len(prices) < slow + signal_period:
-        return 0, 0, 0
-    ema_fast = calculate_ema(prices[-fast:], fast)
-    ema_slow = calculate_ema(prices[-slow:], slow)
-    macd_line = ema_fast - ema_slow
-    signal_line = calculate_ema(prices[-signal_period:], signal_period)
-    histogram = macd_line - signal_line
-    return macd_line, signal_line, histogram
+print(f"\n📊 Checking {symbol} at {timestamp}...")
 
-def get_france_time():
-    utc_now = datetime.datetime.utcnow()
-    france_tz = pytz.timezone('Europe/Paris')
-    return utc_now.replace(tzinfo=pytz.utc).astimezone(france_tz)
-
-def fetch_price_data(symbol):
-    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval=1min&outputsize=50&apikey={API_KEY}"
-    try:
-        response = requests.get(url)
-        data = response.json()
-        if "values" not in data:
-            print("⚠️ API returned no values for", symbol)
-            return []
-        closes = [float(entry["close"]) for entry in reversed(data["values"])]
-        return closes
-    except Exception as e:
-        print("Error fetching price data:", str(e))
-        return []
-
-def generate_signal(prices):
-    if len(prices) < 26:
-        return None, 0
-    ema5 = calculate_ema(prices[-5:], 5)
-    ema10 = calculate_ema(prices[-10:], 10)
-    rsi = calculate_rsi(prices)
-    macd, signal, histogram = calculate_macd(prices)
-
+if "values" not in data:
+    print(f"❌ API response error for {symbol}: {data}")
+    print("❌ No prices fetched.")
+    signal = None
     score = 0
-    if ema5 > ema10:
-        score += 3
-    if 50 < rsi < 70:
-        score += 2
-    if macd > signal and histogram > 0:
-        score += 5
-
-    if score >= 5:  # Lowered for testing
-        return "CALL", score
-    elif ema5 < ema10 and rsi > 30 and macd < signal and histogram < 0:
-        return "PUT", score
-    return None, score
-
-def send_telegram_message(message):
-    url = f"https://api.telegram.org/bot{BOT_API_TOKEN}/sendMessage"
-    payload = {'chat_id': USER_ID, 'text': message}
-    try:
-        response = requests.post(url, data=payload)
-        print("✅ Telegram response:", response.status_code, response.text)
-    except Exception as e:
-        print("❌ Telegram send error:", str(e))
-
-def save_signal_to_file(message):
-    with open("signals.txt", "a") as file:
-        file.write(message + "\n")
-
-# === MAIN SCRIPT ===
-now = get_france_time()
-symbol = symbols[now.minute % len(symbols)]
-print(f"⏰ Checking {symbol} at {now.strftime('%H:%M:%S')} France time...")
-prices = fetch_price_data(symbol)
-
-signal, score = generate_signal(prices)
-print(f"📈 Signal: {signal} | Score: {score}/10")
-
-if signal:
-    trade_time = now + datetime.timedelta(minutes=5)
-    time_str = trade_time.strftime("%H:%M")
-    message = f"{time_str}  {symbol}  {signal} (Score: {score}/10)"
-    print("📤 Sending message:", message)
-    send_telegram_message(message)
-    save_signal_to_file(message)
 else:
-    print("⚠️ No valid signal to send.")
+    values = data["values"]
+    if len(values) < 2:
+        print("❌ Not enough data.")
+        signal = None
+        score = 0
+    else:
+        close_1 = float(values[0]["close"])
+        close_2 = float(values[1]["close"])
+
+        if close_1 > close_2:
+            signal = "CALL"
+        elif close_1 < close_2:
+            signal = "PUT"
+        else:
+            signal = "None"
+
+        score = 10 if signal in ["CALL", "PUT"] else 0
+
+        print(f"🔍 Signal: {signal} | Score: {score}/10")
+
+# ✅ Send signal via Telegram if valid
+if signal in ["CALL", "PUT"]:
+    message = f"📣 *{symbol}* Signal\nTime: {timestamp} UTC\nSignal: *{signal}* 🚀\nScore: {score}/10"
+    telegram_url = f"https://api.telegram.org/bot{BOT_API_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": USER_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    tg_response = requests.post(telegram_url, data=payload)
+    if tg_response.status_code == 200:
+        print("✅ Signal sent successfully via Telegram.")
+    else:
+        print(f"❌ Failed to send message: {tg_response.text}")
+else:
+    print(f"⚠️ No valid signal for {symbol} (Score: {score}/10)")
