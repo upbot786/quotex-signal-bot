@@ -2,11 +2,12 @@ import requests
 import datetime
 import pytz
 from statistics import mean
+import os
 
-# === CONFIGURATION ===
-BOT_API_TOKEN = "7636996493:AAGbJoYg9wpG-VYuJwLG6prZpd2g1O3yVrI"
-USER_ID = "7989610604"
-API_KEY = "2bbdaeca1e7e4010a0833015a50350e8"
+# === CONFIGURATION FROM GITHUB SECRETS ===
+BOT_API_TOKEN = os.getenv("7636996493:AAGbJoYg9wpG-VYuJwLG6prZpd2g1O3yVrI")
+USER_ID = os.getenv("7989610604")
+API_KEY = os.getenv("2bbdaeca1e7e4010a0833015a50350e8")
 
 symbols = ["EUR/USD", "USD/JPY", "GBP/USD", "BTC/USD", "ETH/USD"]
 
@@ -20,7 +21,7 @@ def calculate_ema(prices, period):
 def calculate_rsi(prices, period=14):
     gains, losses = [], []
     for i in range(1, len(prices)):
-        diff = prices[i] - prices[i-1]
+        diff = prices[i] - prices[i - 1]
         gains.append(max(0, diff))
         losses.append(max(0, -diff))
     if len(gains) < period:
@@ -53,10 +54,12 @@ def fetch_price_data(symbol):
         response = requests.get(url)
         data = response.json()
         if "values" not in data:
+            print(f"❌ API response error for {symbol}: {data}")
             return []
         closes = [float(entry["close"]) for entry in reversed(data["values"])]
         return closes
-    except:
+    except Exception as e:
+        print("❌ Exception in fetch_price_data:", e)
         return []
 
 def generate_signal(prices):
@@ -85,9 +88,11 @@ def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{BOT_API_TOKEN}/sendMessage"
     payload = {'chat_id': USER_ID, 'text': message}
     try:
-        requests.post(url, data=payload)
-    except:
-        pass
+        response = requests.post(url, data=payload)
+        print("📨 Telegram status:", response.status_code)
+        print("📨 Telegram response:", response.text)
+    except Exception as e:
+        print("❌ Telegram exception:", e)
 
 def save_signal_to_file(message):
     with open("signals.txt", "a") as file:
@@ -97,8 +102,15 @@ def save_signal_to_file(message):
 now = get_france_time()
 symbol = symbols[now.minute % len(symbols)]
 print(f"📊 Checking {symbol} at {now.strftime('%H:%M:%S')}...")
+
 prices = fetch_price_data(symbol)
+if prices:
+    print("📈 Prices (last 10):", prices[-10:])
+else:
+    print("❌ No prices fetched.")
+
 signal, score = generate_signal(prices)
+print(f"🔍 Signal: {signal} | Score: {score}/10")
 
 if signal:
     trade_time = now + datetime.timedelta(minutes=5)
