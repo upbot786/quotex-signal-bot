@@ -1,10 +1,10 @@
 import requests
 import datetime
 import pytz
-from statistics import mean
 import os
+from statistics import mean
 
-# === CONFIGURATION FROM GITHUB SECRETS ===
+# === LOAD SECRETS FROM ENVIRONMENT ===
 BOT_API_TOKEN = os.getenv("7636996493:AAEa9ddt4okvNj2RyeWGPemvN3NDsQ_wXCc")
 USER_ID = os.getenv("7989610604")
 API_KEY = os.getenv("2bbdaeca1e7e4010a0833015a50350e8")
@@ -54,12 +54,12 @@ def fetch_price_data(symbol):
         response = requests.get(url)
         data = response.json()
         if "values" not in data:
-            print(f"❌ API response error for {symbol}: {data}")
+            print("⚠️ API returned no values for", symbol)
             return []
         closes = [float(entry["close"]) for entry in reversed(data["values"])]
         return closes
     except Exception as e:
-        print("❌ Exception in fetch_price_data:", e)
+        print("Error fetching price data:", str(e))
         return []
 
 def generate_signal(prices):
@@ -78,7 +78,7 @@ def generate_signal(prices):
     if macd > signal and histogram > 0:
         score += 5
 
-    if score >= 9:
+    if score >= 5:  # Lowered for testing
         return "CALL", score
     elif ema5 < ema10 and rsi > 30 and macd < signal and histogram < 0:
         return "PUT", score
@@ -89,10 +89,9 @@ def send_telegram_message(message):
     payload = {'chat_id': USER_ID, 'text': message}
     try:
         response = requests.post(url, data=payload)
-        print("📨 Telegram status:", response.status_code)
-        print("📨 Telegram response:", response.text)
+        print("✅ Telegram response:", response.status_code, response.text)
     except Exception as e:
-        print("❌ Telegram exception:", e)
+        print("❌ Telegram send error:", str(e))
 
 def save_signal_to_file(message):
     with open("signals.txt", "a") as file:
@@ -101,23 +100,18 @@ def save_signal_to_file(message):
 # === MAIN SCRIPT ===
 now = get_france_time()
 symbol = symbols[now.minute % len(symbols)]
-print(f"📊 Checking {symbol} at {now.strftime('%H:%M:%S')}...")
-
+print(f"⏰ Checking {symbol} at {now.strftime('%H:%M:%S')} France time...")
 prices = fetch_price_data(symbol)
-if prices:
-    print("📈 Prices (last 10):", prices[-10:])
-else:
-    print("❌ No prices fetched.")
 
 signal, score = generate_signal(prices)
-print(f"🔍 Signal: {signal} | Score: {score}/10")
+print(f"📈 Signal: {signal} | Score: {score}/10")
 
 if signal:
     trade_time = now + datetime.timedelta(minutes=5)
     time_str = trade_time.strftime("%H:%M")
     message = f"{time_str}  {symbol}  {signal} (Score: {score}/10)"
+    print("📤 Sending message:", message)
     send_telegram_message(message)
     save_signal_to_file(message)
-    print("✅ Signal sent:", message)
 else:
-    print(f"⚠️ No valid signal for {symbol} (Score: {score}/10)")
+    print("⚠️ No valid signal to send.")
