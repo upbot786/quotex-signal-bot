@@ -5,7 +5,7 @@ from statistics import mean
 import os
 
 # === CONFIGURATION FROM GITHUB SECRETS ===
-BOT_API_TOKEN = os.getenv("7636996493:AAGbJoYg9wpG-VYuJwLG6prZpd2g1O3yVrI")
+BOT_API_TOKEN = os.getenv("7636996493:AAEa9ddt4okvNj2RyeWGPemvN3NDsQ_wXCc")
 USER_ID = os.getenv("7989610604")
 API_KEY = os.getenv("2bbdaeca1e7e4010a0833015a50350e8")
 
