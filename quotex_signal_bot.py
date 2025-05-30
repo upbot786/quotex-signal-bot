@@ -1,76 +1,63 @@
+import os
 import requests
 import telegram
 from datetime import datetime
-from pytz import timezone
-import os
+import pytz
 
-# Read from environment (GitHub secrets)
+# Load secrets from environment variables
 BOT_API_TOKEN = os.getenv("7636996493:AAEa9ddt4okvNj2RyeWGPemvN3NDsQ_wXCc")
 USER_ID = os.getenv("7989610604")
 API_KEY = os.getenv("2bbdaeca1e7e4010a0833015a50350e8")
 
-# Setup bot
+# Check for missing keys
+if not BOT_API_TOKEN or not USER_ID or not API_KEY:
+    raise ValueError("BOT_API_TOKEN, USER_ID, or API_KEY not set.")
+
+# Initialize Telegram Bot
 bot = telegram.Bot(token=BOT_API_TOKEN)
 
-# France time
-def get_france_time():
-    paris = timezone('Europe/Paris')
-    return datetime.now(paris).strftime("%H:%M:%S")
+# Define trading pairs to check
+PAIRS = ["BTC/USD", "ETH/USD", "EUR/USD", "GBP/USD", "USD/JPY"]
 
-# List of symbols (you can add OTC if supported by the API)
-symbols = ["BTC/USD", "ETH/USD", "EUR/USD", "USD/JPY", "GBP/USD"]
+# Set France time zone
+tz = pytz.timezone("Europe/Paris")
+now = datetime.now(tz)
+current_time = now.strftime("%H:%M:%S")
 
-# Fetch price from TwelveData API
-def fetch_price(symbol):
-    url = f"https://api.twelvedata.com/price?symbol={symbol}&apikey={API_KEY}"
-    response = requests.get(url)
+# Function to get signal score (placeholder logic — customize as needed)
+def get_power_score(data):
     try:
-        data = response.json()
-        if "price" in data:
-            return float(data["price"])
-        else:
-            print(f"⚠️ API error for {symbol}: {data}")
-            return None
-    except Exception as e:
-        print(f"❌ Failed to fetch data for {symbol}: {e}")
-        return None
+        close = float(data["values"][0]["close"])
+        open_ = float(data["values"][0]["open"])
+        if close > open_:
+            return 9  # Example signal score
+    except:
+        pass
+    return 0
 
-# Signal logic: example condition
-def generate_signal(symbol, price):
-    if price is None:
-        return None, 0
-    # Simple example signal condition
-    if symbol == "BTC/USD" and price > 68000:
-        return "CALL", 9
-    elif symbol == "BTC/USD" and price < 65000:
-        return "PUT", 9
-    elif symbol != "BTC/USD" and int(price) % 2 == 0:
-        return "CALL", 8
+# Loop over each pair
+for symbol in PAIRS:
+    symbol_encoded = symbol.replace("/", "")
+    print(f"⏰ Checking {symbol} at {current_time} France time...")
+
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol_encoded}&interval=1min&apikey={API_KEY}&outputsize=1"
+
+    response = requests.get(url)
+    data = response.json()
+
+    if "status" in data and data["status"] == "error":
+        print(f"❌ API error for {symbol}: {data}")
+        continue
+
+    if "values" not in data:
+        print(f"⚠️ No values returned for {symbol}")
+        continue
+
+    power_score = get_power_score(data)
+
+    if power_score >= 9:
+        message = f"✅ Signal for {symbol} at {current_time} (France time)\nPower Score: {power_score}/10\nDirection: CALL 📈"
+        bot.send_message(chat_id=USER_ID, text=message)
+        print("📤 Signal sent via Telegram.")
     else:
-        return None, 0
-
-# Send signal
-def send_signal(symbol, signal, price, score):
-    france_time = get_france_time()
-    message = (
-        f"📊 Signal for {symbol}\n"
-        f"⏰ France time: {france_time}\n"
-        f"💵 Price: {price}\n"
-        f"📈 Signal: {signal} | Power Score: {score}/10"
-    )
-    bot.send_message(chat_id=USER_ID, text=message)
-
-# Run the bot
-def run_bot():
-    france_time = get_france_time()
-    for symbol in symbols:
-        print(f"⏰ Checking {symbol} at {france_time} France time...")
-        price = fetch_price(symbol)
-        signal, score = generate_signal(symbol, price)
-        if signal and score >= 8:
-            send_signal(symbol, signal, price, score)
-        else:
-            print(f"⚠️ No valid signal for {symbol} (Score: {score}/10)")
-
-if __name__ == "__main__":
-    run_bot()
+        print(f"⚠️ No strong signal for {symbol} (Score: {power_score}/10)")
