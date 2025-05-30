@@ -1,63 +1,36 @@
 import os
 import requests
 import telegram
-from datetime import datetime
 import pytz
+from datetime import datetime
 
-# Load secrets from environment variables
 BOT_API_TOKEN = os.getenv("BOT_API_TOKEN")
 USER_ID = os.getenv("USER_ID")
 API_KEY = os.getenv("API_KEY")
 
-# Check for missing keys
 if not BOT_API_TOKEN or not USER_ID or not API_KEY:
     raise ValueError("BOT_API_TOKEN, USER_ID, or API_KEY not set.")
 
-# Initialize Telegram Bot
 bot = telegram.Bot(token=BOT_API_TOKEN)
 
-# Define trading pairs to check
-PAIRS = ["BTC/USD", "ETH/USD", "EUR/USD", "GBP/USD", "USD/JPY"]
+# Set timezone
+paris = pytz.timezone("Europe/Paris")
 
-# Set France time zone
-tz = pytz.timezone("Europe/Paris")
-now = datetime.now(tz)
-current_time = now.strftime("%H:%M:%S")
+# Symbols to check
+symbols = ["USD/JPY", "GBP/USD", "ETH/USD", "EUR/USD", "BTC/USD"]
 
-# Function to get signal score (placeholder logic — customize as needed)
-def get_power_score(data):
-    try:
-        close = float(data["values"][0]["close"])
-        open_ = float(data["values"][0]["open"])
-        if close > open_:
-            return 9  # Example signal score
-    except:
-        pass
-    return 0
+for symbol in symbols:
+    now = datetime.now(paris)
+    print(f"⏰ Checking {symbol} at {now.strftime('%H:%M:%S')} France time...")
 
-# Loop over each pair
-for symbol in PAIRS:
-    symbol_encoded = symbol.replace("/", "")
-    print(f"⏰ Checking {symbol} at {current_time} France time...")
+    response = requests.get(
+        "https://api.twelvedata.com/price",
+        params={"symbol": symbol.replace("/", ""), "apikey": API_KEY}
+    ).json()
 
-    url = f"https://api.twelvedata.com/time_series?symbol={symbol_encoded}&interval=1min&apikey={API_KEY}&outputsize=1"
-
-    response = requests.get(url)
-    data = response.json()
-
-    if "status" in data and data["status"] == "error":
-        print(f"❌ API error for {symbol}: {data}")
-        continue
-
-    if "values" not in data:
-        print(f"⚠️ No values returned for {symbol}")
-        continue
-
-    power_score = get_power_score(data)
-
-    if power_score >= 9:
-        message = f"✅ Signal for {symbol} at {current_time} (France time)\nPower Score: {power_score}/10\nDirection: CALL 📈"
+    if "price" in response:
+        price = response["price"]
+        message = f"🔔 Signal for {symbol}\nCurrent price: {price}\nTime: {now.strftime('%H:%M:%S')} Paris"
         bot.send_message(chat_id=USER_ID, text=message)
-        print("📤 Signal sent via Telegram.")
     else:
-        print(f"⚠️ No strong signal for {symbol} (Score: {power_score}/10)")
+        print(f"⚠️ API error for {symbol}: {response}")
