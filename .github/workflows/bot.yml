@@ -1,8 +1,8 @@
-name: Run Quotex Signal Bot Every 5 Minutes
+name: Run Quotex Signal Bot
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: '*/5 * * * *'  # Every 5 minutes
   workflow_dispatch:
 
 jobs:
@@ -10,21 +10,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: |
-        pip install requests pytz
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Run the signal bot
-      run: python quotex_signal_bot.py
-      env:
-        BOT_API_TOKEN: ${{ secrets.BOT_API_TOKEN }}
-        USER_ID: ${{ secrets.USER_ID }}
-        API_KEY: ${{ secrets.API_KEY }}
+      - name: Run the signal bot
+        env:
+          BOT_API_TOKEN: ${{ secrets.BOT_API_TOKEN }}
+          USER_ID: ${{ secrets.USER_ID }}
+          API_KEY: ${{ secrets.API_KEY }}
+        run: python quotex_signal_bot.py
