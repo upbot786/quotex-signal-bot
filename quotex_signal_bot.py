@@ -5,9 +5,9 @@ from datetime import datetime
 import pytz
 
 # Load secrets from environment variables
-BOT_API_TOKEN = os.getenv("7636996493:AAEa9ddt4okvNj2RyeWGPemvN3NDsQ_wXCc")
-USER_ID = os.getenv("7989610604")
-API_KEY = os.getenv("2bbdaeca1e7e4010a0833015a50350e8")
+BOT_API_TOKEN = os.getenv("BOT_API_TOKEN")
+USER_ID = os.getenv("USER_ID")
+API_KEY = os.getenv("API_KEY")
 
 # Check for missing keys
 if not BOT_API_TOKEN or not USER_ID or not API_KEY:
