@@ -1,0 +1,30 @@
+name: Run Quotex Signal Bot
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Quotex Signal Bot
+        env:
+          BOT_API_TOKEN: ${{ secrets.BOT_API_TOKEN }}
+          USER_ID: ${{ secrets.USER_ID }}
+          API_KEY: ${{ secrets.API_KEY }}
+        run: python quotex_signal_bot.py
