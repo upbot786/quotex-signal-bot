@@ -1,82 +1,62 @@
-import os
 import requests
-import time
 from datetime import datetime
+import time
 import pytz
 import telegram
 
-# ✅ Load keys from GitHub Actions secrets
-BOT_API_TOKEN = os.getenv("7636996493:AAEa9ddt4okvNj2RyeWGPemvN3NDsQ_wXCc")
-USER_ID = os.getenv("7989610604")
-API_KEY = os.getenv("2bbdaeca1e7e4010a0833015a50350e8")
+# 🛠 Replace these with your real keys
+BOT_API_TOKEN = "7636996493:AAEa9ddt4okvNj2RyeWGPemvN3NDsQ_wXCc"
+USER_ID = "7989610604"
+API_KEY = "2bbdaeca1e7e4010a0833015a50350e8"
 
-# ✅ Initialize Telegram bot
 bot = telegram.Bot(token=BOT_API_TOKEN)
 
-# Settings
-PAIR = "BTC/USD"
-INTERVAL = "1min"
-SOURCE = "Binance"  # Optional: TwelveData supports "Binance" source
-
-# France timezone
-france_tz = pytz.timezone("Europe/Paris")
-
-def get_market_data():
-    url = f"https://api.twelvedata.com/time_series?symbol={PAIR}:{SOURCE}&interval={INTERVAL}&apikey={API_KEY}"
+def get_price_data(symbol="BTC/USD:Binance"):
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval=1min&outputsize=2&apikey={API_KEY}"
+    response = requests.get(url)
     try:
-        response = requests.get(url)
         data = response.json()
-        if "status" in data and data["status"] == "error":
-            print(f"🧪 Full response: {data}")
+        if "values" in data:
+            return data["values"]
+        else:
+            print("🧪 Full response:", data)
             return None
-        return data["values"]
     except Exception as e:
-        print(f"❌ Error fetching data: {e}")
+        print("⚠️ JSON decode error:", e)
         return None
 
-def analyze_signal(prices):
-    # Very simple signal logic for example
-    if not prices or len(prices) < 2:
+def analyze_data(values):
+    if len(values) < 2:
         return None, 0
-
-    close_now = float(prices[0]["close"])
-    close_prev = float(prices[1]["close"])
+    last = float(values[0]["close"])
+    prev = float(values[1]["close"])
     score = 0
+    signal = None
 
-    if close_now > close_prev:
-        signal = "CALL 🔼"
-        score = 10
-    elif close_now < close_prev:
-        signal = "PUT 🔽"
-        score = 10
-    else:
-        signal = "None"
-        score = 0
+    if last > prev:
+        signal = "CALL"
+        score = 9
+    elif last < prev:
+        signal = "PUT"
+        score = 9
 
     return signal, score
 
-def send_signal_to_telegram(signal, score):
-    if signal == "None":
-        print("⚠️ No valid signal to send.")
-        return
-
-    now = datetime.now(france_tz).strftime("%H:%M:%S")
-    message = f"📊 Signal for {PAIR} at {now} France time:\n\n🔍 Signal: {signal}\n🔥 Power Score: {score}/10"
-    bot.send_message(chat_id=USER_ID, text=message)
-    print(f"✅ Sent signal to Telegram: {signal}")
-
 def main():
-    now = datetime.now(france_tz).strftime("%H:%M:%S")
-    print(f"⏰ Checking {PAIR}:{SOURCE} at {now} France time...")
-
-    prices = get_market_data()
-    if not prices:
-        print(f"⚠️ API returned no values for {PAIR}:{SOURCE}")
+    france_time = datetime.now(pytz.timezone("Europe/Paris")).strftime("%H:%M:%S")
+    print(f"⏰ Checking BTC/USD:Binance at {france_time} France time...")
+    values = get_price_data("BTC/USD:Binance")
+    if not values:
+        print("⚠️ API returned no values for BTC/USD:Binance")
         return
 
-    signal, score = analyze_signal(prices)
-    print(f"📈 Signal: {signal} | Score: {score}/10")
-    send_signal_to_telegram(signal, score)
+    signal, score = analyze_data(values)
+    if signal and score >= 9:
+        message = f"✅ SIGNAL: {signal}\nScore: {score}/10\nTime: {france_time}"
+        print(message)
+        bot.send_message(chat_id=USER_ID, text=message)
+    else:
+        print(f"⚠️ No valid signal to send.")
 
 if __name__ == "__main__":
     main()
