@@ -1,62 +1,76 @@
 import requests
-from telegram import Bot, ParseMode
+import telegram
 from datetime import datetime
-import time
+from pytz import timezone
+import os
 
-# ✅ Your API keys (hardcoded for now — secure in environment vars for production)
-BOT_API_TOKEN = "7636996493:AAEa9ddt4okvNj2RyeWGPemvN3NDsQ_wXCc"
-USER_ID = "7989610604"
-API_KEY = "2bbdaeca1e7e4010a0833015a50350e8"
+# Read from environment (GitHub secrets)
+BOT_API_TOKEN = os.getenv("7636996493:AAEa9ddt4okvNj2RyeWGPemvN3NDsQ_wXCc")
+USER_ID = os.getenv("7989610604")
+API_KEY = os.getenv("2bbdaeca1e7e4010a0833015a50350e8")
 
-# Initialize Telegram Bot
-bot = Bot(token=BOT_API_TOKEN)
+# Setup bot
+bot = telegram.Bot(token=BOT_API_TOKEN)
 
-# Function to fetch latest data from TwelveData API
+# France time
+def get_france_time():
+    paris = timezone('Europe/Paris')
+    return datetime.now(paris).strftime("%H:%M:%S")
+
+# List of symbols (you can add OTC if supported by the API)
+symbols = ["BTC/USD", "ETH/USD", "EUR/USD", "USD/JPY", "GBP/USD"]
+
+# Fetch price from TwelveData API
 def fetch_price(symbol):
-    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval=1min&outputsize=1&apikey={API_KEY}"
+    url = f"https://api.twelvedata.com/price?symbol={symbol}&apikey={API_KEY}"
     response = requests.get(url)
-    data = response.json()
-    
-    if "status" in data and data["status"] == "error":
-        print(f"❌ API response error for {symbol}: {data}")
-        return None
     try:
-        price = float(data["values"][0]["close"])
-        return price
-    except (KeyError, IndexError, ValueError):
-        print(f"⚠️ Unexpected data format: {data}")
+        data = response.json()
+        if "price" in data:
+            return float(data["price"])
+        else:
+            print(f"⚠️ API error for {symbol}: {data}")
+            return None
+    except Exception as e:
+        print(f"❌ Failed to fetch data for {symbol}: {e}")
         return None
 
-# Generate a dummy signal for now
-def generate_signal(symbol):
-    price = fetch_price(symbol)
+# Signal logic: example condition
+def generate_signal(symbol, price):
     if price is None:
         return None, 0
-
-    # Example dummy signal logic (placeholder)
-    if price > 50000:
-        return "BUY", 10
+    # Simple example signal condition
+    if symbol == "BTC/USD" and price > 68000:
+        return "CALL", 9
+    elif symbol == "BTC/USD" and price < 65000:
+        return "PUT", 9
+    elif symbol != "BTC/USD" and int(price) % 2 == 0:
+        return "CALL", 8
     else:
-        return "SELL", 7
+        return None, 0
 
-# Send signal to Telegram
-def send_signal(symbol, signal, score):
-    now = datetime.now().strftime("%H:%M:%S")
-    message = f"📊 Signal for *{symbol}*\n⏰ Time: *{now}* France time\n📈 Signal: *{signal}* | Score: *{score}/10*"
-    bot.send_message(chat_id=USER_ID, text=message, parse_mode=ParseMode.MARKDOWN)
+# Send signal
+def send_signal(symbol, signal, price, score):
+    france_time = get_france_time()
+    message = (
+        f"📊 Signal for {symbol}\n"
+        f"⏰ France time: {france_time}\n"
+        f"💵 Price: {price}\n"
+        f"📈 Signal: {signal} | Power Score: {score}/10"
+    )
+    bot.send_message(chat_id=USER_ID, text=message)
 
-# Main function
-def main():
-    symbol = "BTC/USD"
-
-    print(f"⏰ Checking {symbol} at {datetime.now().strftime('%H:%M:%S')} France time...")
-
-    signal, score = generate_signal(symbol)
-
-    if signal and score >= 7:
-        send_signal(symbol, signal, score)
-    else:
-        print(f"⚠️ No valid signal for {symbol} (Score: {score}/10)")
+# Run the bot
+def run_bot():
+    france_time = get_france_time()
+    for symbol in symbols:
+        print(f"⏰ Checking {symbol} at {france_time} France time...")
+        price = fetch_price(symbol)
+        signal, score = generate_signal(symbol, price)
+        if signal and score >= 8:
+            send_signal(symbol, signal, price, score)
+        else:
+            print(f"⚠️ No valid signal for {symbol} (Score: {score}/10)")
 
 if __name__ == "__main__":
-    main()
+    run_bot()
