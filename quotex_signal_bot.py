@@ -1,74 +1,66 @@
 import os
-import time
 import requests
 from datetime import datetime
-import pytz
+import time
 
-# Load environment variables
+# Environment variables
 BOT_API_TOKEN = os.getenv("BOT_API_TOKEN")
 USER_ID = os.getenv("USER_ID")
 API_KEY = os.getenv("API_KEY")
 
-# Validate environment variables
 if not BOT_API_TOKEN or not USER_ID or not API_KEY:
     raise ValueError("BOT_API_TOKEN, USER_ID, or API_KEY not set.")
 
-# Correct symbol list per Twelve Data format
+# Correct Twelve Data symbols
 symbols = [
-    "USD/JPY",
-    "GBP/USD",
-    "ETH/USD",
-    "EUR/USD",
-    "BTC/USD"
+    "EUR/USD:FX",
+    "USD/JPY:FX",
+    "GBP/USD:FX",
+    "BTC/USD",
+    "ETH/USD"
 ]
 
-# Timezone for France
-tz = pytz.timezone('Europe/Paris')
-
-# Send message to Telegram
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{BOT_API_TOKEN}/sendMessage"
     payload = {
         "chat_id": USER_ID,
-        "text": message,
-        "parse_mode": "HTML"
+        "text": message
     }
     try:
         response = requests.post(url, data=payload)
-        if response.status_code != 200:
-            print(f"❌ Telegram error: {response.text}")
+        return response.status_code == 200
     except Exception as e:
-        print(f"❌ Telegram send failed: {e}")
+        print(f"❌ Telegram error: {e}")
+        return False
 
-# Fetch price from Twelve Data API
 def fetch_price(symbol):
-    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval=1min&outputsize=1&apikey={API_KEY}"
-    response = requests.get(url)
-    return response.json()
-
-# Main loop (one-time check per symbol)
-for symbol in symbols:
-    now = datetime.now(tz).strftime("%H:%M:%S")
-    print(f"⏰ Checking {symbol} at {now} France time...")
-
+    url = f"https://api.twelvedata.com/price?symbol={symbol}&apikey={API_KEY}"
     try:
-        data = fetch_price(symbol)
-
-        if 'status' in data and data['status'] == 'error':
-            error_msg = f"⚠️ Error for {symbol}: {data['message']}"
-            print(error_msg)
-            send_telegram_message(error_msg)
-
+        response = requests.get(url)
+        data = response.json()
+        if "price" in data:
+            return float(data["price"])
         else:
-            price = data['values'][0]['close']
-            success_msg = f"✅ <b>{symbol}</b>\nCurrent Price: <code>{price}</code>\n🕒 Time: {now} 🇫🇷"
-            print(success_msg)
-            send_telegram_message(success_msg)
-
+            return data  # Return error dict for debugging
     except Exception as e:
-        error_msg = f"❌ Failed to fetch {symbol}: {e}"
-        print(error_msg)
-        send_telegram_message(error_msg)
+        return {"error": str(e)}
 
-    # Sleep 8–10 seconds to avoid API rate limit
-    time.sleep(10)
+def main():
+    while True:
+        france_time = datetime.utcnow().timestamp() + (2 * 3600)
+        now = datetime.fromtimestamp(france_time).strftime("%H:%M:%S")
+        print(f"⏰ Checking market at {now} France time...")
+
+        for symbol in symbols:
+            result = fetch_price(symbol)
+            if isinstance(result, float):
+                message = f"✅ {symbol} price: {result}"
+                print(message)
+                send_telegram_message(message)
+            else:
+                print(f"⚠️ API error for {symbol}: {result}")
+
+        time.sleep(60)  # Wait 1 minute between cycles
+
+if __name__ == "__main__":
+    main()
