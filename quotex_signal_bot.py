@@ -3,19 +3,18 @@ import requests
 from datetime import datetime
 import time
 
-# Environment variables
 BOT_API_TOKEN = os.getenv("BOT_API_TOKEN")
 USER_ID = os.getenv("USER_ID")
 API_KEY = os.getenv("API_KEY")
 
 if not BOT_API_TOKEN or not USER_ID or not API_KEY:
-    raise ValueError("BOT_API_TOKEN, USER_ID, or API_KEY not set.")
+    raise ValueError("Missing environment variables!")
 
-# Correct Twelve Data symbols
+# Correct symbol list (Twelve Data)
 symbols = [
-    "EUR/USD:FX",
-    "USD/JPY:FX",
-    "GBP/USD:FX",
+    "EUR/USD",
+    "USD/JPY",
+    "GBP/USD",
     "BTC/USD",
     "ETH/USD"
 ]
@@ -41,7 +40,7 @@ def fetch_price(symbol):
         if "price" in data:
             return float(data["price"])
         else:
-            return data  # Return error dict for debugging
+            return data  # Error dict
     except Exception as e:
         return {"error": str(e)}
 
@@ -54,13 +53,13 @@ def main():
         for symbol in symbols:
             result = fetch_price(symbol)
             if isinstance(result, float):
-                message = f"✅ {symbol} price: {result}"
-                print(message)
-                send_telegram_message(message)
+                msg = f"✅ {symbol} price: {result}"
+                print(msg)
+                send_telegram_message(msg)
             else:
                 print(f"⚠️ API error for {symbol}: {result}")
 
-        time.sleep(60)  # Wait 1 minute between cycles
+        time.sleep(60)
 
 if __name__ == "__main__":
     main()
